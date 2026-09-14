@@ -8,27 +8,27 @@
 }
 
 .hero {
-  position: sticky;
-  top: 0;
+  position: relative;
   min-height: 100vh;
   overflow: hidden;
   isolation: isolate;
 }
 
 .scene {
-  position: absolute;
+  position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
-  z-index: -2;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .hero::after {
   content: "";
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 1;
   background:
     linear-gradient(90deg, rgba(5, 6, 8, 0.88) 0%, rgba(5, 6, 8, 0.52) 44%, rgba(5, 6, 8, 0.18) 100%),
     linear-gradient(180deg, rgba(5, 6, 8, 0.2), rgba(5, 6, 8, 0.82));
@@ -36,13 +36,17 @@
 }
 
 .topbar {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 5;
   width: min(1180px, calc(100% - 40px));
   min-height: 76px;
-  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
+  transform: translateX(-50%);
 }
 
 .brand,
@@ -80,8 +84,11 @@
 }
 
 .hero__copy {
+  position: relative;
+  z-index: 3;
   width: min(620px, calc(100% - 40px));
-  margin: clamp(72px, 13vh, 128px) auto 0;
+  margin: 0 auto;
+  padding-top: clamp(132px, 20vh, 188px);
   transform: translateX(calc((min(1180px, 100vw - 40px) - min(620px, 100vw - 40px)) / -2));
 }
 
@@ -129,9 +136,10 @@ h1 {
 }
 
 .progress-card {
-  position: absolute;
+  position: fixed;
   right: max(20px, calc((100vw - 1180px) / 2));
   bottom: 44px;
+  z-index: 5;
   width: min(360px, calc(100% - 40px));
   padding: 22px;
   border: 1px solid rgba(246, 248, 251, 0.14);
@@ -172,7 +180,7 @@ h1 {
 
 .content-band {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   width: min(1180px, calc(100% - 40px));
   min-height: 76vh;
   margin: 0 auto;
@@ -201,7 +209,8 @@ h1 {
   padding: 26px;
   border: 1px solid rgba(246, 248, 251, 0.12);
   border-radius: 8px;
-  background: rgba(246, 248, 251, 0.055);
+  background: rgba(8, 13, 18, 0.72);
+  backdrop-filter: blur(14px);
 }
 
 .service-grid span {
@@ -223,7 +232,7 @@ h1 {
 
 .story-steps {
   position: relative;
-  z-index: 1;
+  z-index: 3;
   min-height: 520vh;
   padding: 12vh 0;
   display: grid;
@@ -257,7 +266,7 @@ h1 {
 
 .finish {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   width: min(900px, calc(100% - 40px));
   min-height: 72vh;
   margin: 0 auto;
@@ -285,7 +294,7 @@ h1 {
 
   .hero__copy {
     width: calc(100% - 28px);
-    margin-top: 64px;
+    padding-top: 122px;
     transform: none;
   }
 
