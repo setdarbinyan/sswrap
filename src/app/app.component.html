@@ -1,0 +1,74 @@
+<main class="page">
+  <section class="hero">
+    <canvas #sceneCanvas class="scene" aria-label="SSWRAP film installation 3D scene"></canvas>
+
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="SSWRAP home">
+        <span class="brand__mark">SS</span>
+        <span>SSWRAP</span>
+      </a>
+
+      <nav class="nav" aria-label="Main navigation">
+        <a href="#films">Пленки</a>
+        <a href="#process">Процесс</a>
+        <a href="#contact">Контакты</a>
+      </nav>
+    </header>
+
+    <div class="hero__copy">
+      <p class="eyebrow">Автопленки нового уровня</p>
+      <h1>Цветная пленка и прозрачная бронь для машин</h1>
+      <p>
+        Визуальная подача продукта через scroll-анимацию: рулон раскрывается,
+        пленка отрезается и наносится на стекло автомобиля.
+      </p>
+      <a class="cta" href="#process">Смотреть процесс</a>
+    </div>
+
+    <aside class="progress-card" aria-live="polite">
+      <span>{{ steps[activeStep].label }}</span>
+      <strong>{{ steps[activeStep].title }}</strong>
+      <p>{{ steps[activeStep].text }}</p>
+      <div class="progress-card__bar">
+        <i [style.width.%]="progress * 100"></i>
+      </div>
+    </aside>
+  </section>
+
+  <section id="films" class="content-band">
+    <div>
+      <p class="eyebrow">SSWRAP placeholder brand</p>
+      <h2>Один сайт, две главные услуги</h2>
+    </div>
+
+    <div class="service-grid">
+      <article>
+        <span>Color</span>
+        <h3>Цветная пленка</h3>
+        <p>Смена цвета, глянцевые и сатиновые решения, быстрый визуальный апгрейд автомобиля.</p>
+      </article>
+
+      <article>
+        <span>Armor</span>
+        <h3>Прозрачная бронь</h3>
+        <p>Защитный слой для стекол и кузова: чистый вид, меньше следов от дороги и мойки.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="process" class="story-steps" aria-label="Scroll animation steps">
+    @for (step of steps; track step.label) {
+      <article [class.story-steps__item--active]="step.label === steps[activeStep].label">
+        <span>{{ step.label }}</span>
+        <h2>{{ step.title }}</h2>
+        <p>{{ step.text }}</p>
+      </article>
+    }
+  </section>
+
+  <section id="contact" class="finish">
+    <p class="eyebrow">Готово</p>
+    <h2>SSWRAP можно докрутить под реальный бренд, фотки и заявки.</h2>
+    <a class="cta cta--light" href="mailto:hello@sswrap.example">hello@sswrap.example</a>
+  </section>
+</main>
