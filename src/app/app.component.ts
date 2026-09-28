@@ -44,7 +44,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     {
       label: '04',
       title: 'Новая машина',
-      text: 'Показываем современный SUV в стиле Li Auto без привязки к логотипам.',
+      text: 'Показываем современный семейный SUV без привязки к брендам и логотипам.',
     },
     {
       label: '05',
@@ -482,11 +482,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.blade.visible = cut > 0.02 && cut < 0.96;
     this.blade.position.y = 2.1 - cut * 3.25;
 
-    this.cutPiece.visible = cut > 0.18 && progress < 0.86;
+    // The cut piece shrinks and fades out as the car appears instead of lingering behind it.
+    this.cutPiece.visible = cut > 0.18 && carReveal < 0.98;
     this.cutPiece.position.x = 0.45 + cut * 1.9 + carReveal * 0.8;
     this.cutPiece.position.y = 0.45 + carReveal * 0.45;
     this.cutPiece.position.z = 0.04 + carReveal * 0.52;
     this.cutPiece.rotation.y = carReveal * -0.5;
+    this.cutPiece.scale.setScalar(1 - carReveal * 0.7);
+    (this.cutPiece.material as THREE.MeshPhysicalMaterial).opacity = 0.42 * (1 - carReveal);
 
     const carScale = 0.02 + carReveal * 0.98;
     this.car.scale.setScalar(carScale);
