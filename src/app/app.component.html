@@ -58,7 +58,7 @@
 
   <section id="process" class="story-steps" aria-label="Scroll animation steps">
     @for (step of steps; track step.label) {
-      <article [class.story-steps__item--active]="step.label === steps[activeStep].label">
+      <article class="story-steps__item" [class.story-steps__item--active]="step.label === steps[activeStep].label">
         <span>{{ step.label }}</span>
         <h2>{{ step.title }}</h2>
         <p>{{ step.text }}</p>

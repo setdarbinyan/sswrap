@@ -70,6 +70,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private blade!: THREE.Mesh;
   private car!: THREE.Group;
   private windshieldFilm!: THREE.Mesh;
+  private readonly windshieldFilmBase = new THREE.Vector3();
+  private readonly windshieldAnchor = new THREE.Vector3();
+  private readonly cameraTarget = new THREE.Vector3();
+  private readonly zoomTarget = new THREE.Vector3();
   private animationFrame = 0;
 
   constructor(private readonly zone: NgZone) {}
@@ -85,7 +89,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     cancelAnimationFrame(this.animationFrame);
-    this.renderer.dispose();
+    this.renderer?.dispose();
   }
 
   @HostListener('window:scroll')
@@ -219,55 +223,154 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.car = new THREE.Group();
 
     const bodyMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xf4f7f8,
-      roughness: 0.18,
-      metalness: 0.35,
+      color: 0xe9eef1,
+      roughness: 0.22,
+      metalness: 0.45,
       clearcoat: 1,
+      clearcoatRoughness: 0.08,
     });
     const glassMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0x0f2534,
+      color: 0x0b1a24,
       transparent: true,
-      opacity: 0.72,
-      roughness: 0.03,
-      metalness: 0,
+      opacity: 0.86,
+      roughness: 0.04,
+      metalness: 0.2,
       clearcoat: 1,
+      side: THREE.DoubleSide,
     });
-    const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x06090d, roughness: 0.42 });
-    const lightMaterial = new THREE.MeshStandardMaterial({
-      color: 0xbff5ff,
-      emissive: 0x64e3ff,
-      emissiveIntensity: 1.7,
+    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x0a0d11, roughness: 0.38, metalness: 0.3 });
+    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x0b0c0e, roughness: 0.85 });
+    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0x9aa4ad, roughness: 0.28, metalness: 0.9 });
+    const headlightMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe8fbff,
+      emissive: 0x9ff0ff,
+      emissiveIntensity: 2.2,
+    });
+    const taillightMaterial = new THREE.MeshStandardMaterial({
+      color: 0xff3b3b,
+      emissive: 0xff1f2e,
+      emissiveIntensity: 1.8,
     });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(5.8, 1.05, 2.35), bodyMaterial);
-    body.position.y = -0.62;
-    body.castShadow = true;
+    // Side profiles: front of the car points to -X, ground contact at y = -1.6.
+    const wheelRadius = 0.46;
+    const wheelY = -1.14;
+    const wheelX = [-1.95, 1.95];
+    const archRadius = 0.56;
 
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(3.9, 1.18, 2.08), bodyMaterial);
-    cabin.position.set(-0.35, 0.06, 0);
-    cabin.scale.set(1, 1, 0.95);
+    const lowerShape = new THREE.Shape();
+    lowerShape.moveTo(2.8, wheelY);
+    lowerShape.lineTo(wheelX[1] + archRadius, wheelY);
+    lowerShape.absarc(wheelX[1], wheelY, archRadius, 0, Math.PI, false);
+    lowerShape.lineTo(wheelX[0] + archRadius, wheelY);
+    lowerShape.absarc(wheelX[0], wheelY, archRadius, 0, Math.PI, false);
+    lowerShape.lineTo(-2.8, wheelY);
+    lowerShape.quadraticCurveTo(-2.98, wheelY, -2.98, -0.92);
+    lowerShape.lineTo(-2.98, -0.46);
+    lowerShape.quadraticCurveTo(-2.97, -0.26, -2.78, -0.22);
+    lowerShape.lineTo(-1.72, -0.04);
+    lowerShape.lineTo(2.9, 0.02);
+    lowerShape.lineTo(2.96, -0.2);
+    lowerShape.lineTo(2.96, -0.92);
+    lowerShape.quadraticCurveTo(2.96, wheelY, 2.8, wheelY);
+
+    const lower = new THREE.Mesh(this.extrudeProfile(lowerShape, 2.2, 0.06), bodyMaterial);
+    lower.castShadow = true;
+
+    // Greenhouse: raked windshield, long flat roof, near-vertical tailgate.
+    const aPillarBase = new THREE.Vector2(-1.72, -0.04);
+    const aPillarTop = new THREE.Vector2(-0.82, 0.74);
+
+    const cabinShape = new THREE.Shape();
+    cabinShape.moveTo(aPillarBase.x, aPillarBase.y);
+    cabinShape.lineTo(aPillarTop.x, aPillarTop.y);
+    cabinShape.quadraticCurveTo(-0.62, 0.8, -0.3, 0.8);
+    cabinShape.lineTo(2.5, 0.79);
+    cabinShape.quadraticCurveTo(2.78, 0.78, 2.84, 0.6);
+    cabinShape.lineTo(2.9, 0.02);
+    cabinShape.lineTo(aPillarBase.x, aPillarBase.y);
+
+    const cabinWidth = 1.96;
+    const cabinBevel = 0.05;
+    const cabin = new THREE.Mesh(this.extrudeProfile(cabinShape, cabinWidth, cabinBevel), bodyMaterial);
     cabin.castShadow = true;
 
-    const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.75, 1.18), glassMaterial);
-    windshield.position.set(-2.02, 0.26, 0);
-    windshield.rotation.y = Math.PI / 2;
-    windshield.rotation.z = -0.08;
+    // Windshield plane aligned with the A-pillar rake.
+    const rake = aPillarTop.clone().sub(aPillarBase);
+    const rakeLength = rake.length();
+    const along = new THREE.Vector3(rake.x, rake.y, 0).normalize();
+    const outward = new THREE.Vector3(-along.y, along.x, 0);
+    const windshieldQuat = new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), along, outward),
+    );
+    const windshieldCenter = new THREE.Vector3(
+      (aPillarBase.x + aPillarTop.x) / 2,
+      (aPillarBase.y + aPillarTop.y) / 2,
+      0,
+    ).addScaledVector(outward, cabinBevel + 0.012);
 
-    const sideGlass = new THREE.Mesh(new THREE.PlaneGeometry(2.25, 0.78), glassMaterial);
-    sideGlass.position.set(-0.35, 0.24, 1.08);
+    const windshield = new THREE.Mesh(
+      new THREE.PlaneGeometry(cabinWidth - 0.08, rakeLength - 0.12),
+      glassMaterial,
+    );
+    windshield.position.copy(windshieldCenter);
+    windshield.quaternion.copy(windshieldQuat);
 
-    const sideGlassRight = sideGlass.clone();
-    sideGlassRight.position.z = -1.08;
-    sideGlassRight.rotation.y = Math.PI;
+    // Daylight opening on both sides, split by black B/C pillars.
+    const windowShape = new THREE.Shape();
+    windowShape.moveTo(-1.5, 0.08);
+    windowShape.lineTo(-0.82, 0.66);
+    windowShape.quadraticCurveTo(-0.66, 0.7, -0.4, 0.7);
+    windowShape.lineTo(2.42, 0.69);
+    windowShape.quadraticCurveTo(2.64, 0.68, 2.7, 0.52);
+    windowShape.lineTo(2.74, 0.08);
+    windowShape.lineTo(-1.5, 0.08);
+    const windowGeometry = new THREE.ShapeGeometry(windowShape, 12);
+    const sideZ = cabinWidth / 2 + cabinBevel + 0.006;
 
-    const grille = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.38, 1.45), blackMaterial);
-    grille.position.set(-2.95, -0.58, 0);
+    const sideDetails: THREE.Object3D[] = [];
+    for (const side of [1, -1]) {
+      const glass = new THREE.Mesh(windowGeometry, glassMaterial);
+      glass.position.z = side * sideZ;
+      sideDetails.push(glass);
 
-    const lightBar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.72), lightMaterial);
-    lightBar.position.set(-3, -0.18, 0);
+      for (const pillarX of [0.42, 1.62]) {
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.64, 0.012), trimMaterial);
+        pillar.position.set(pillarX, 0.39, side * (sideZ + 0.004));
+        sideDetails.push(pillar);
+      }
+
+      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.16, 0.22), bodyMaterial);
+      mirror.position.set(-1.38, 0.12, side * (sideZ + 0.12));
+      mirror.castShadow = true;
+      sideDetails.push(mirror);
+
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.05, 0.06), trimMaterial);
+      rail.position.set(1.05, 0.87, side * 0.82);
+      sideDetails.push(rail);
+
+      const cladding = new THREE.Mesh(new THREE.BoxGeometry(2.72, 0.12, 0.03), trimMaterial);
+      cladding.position.set(0, -1.08, side * 1.17);
+      sideDetails.push(cladding);
+    }
+
+    // Signature full-width front light bar and rear light strip.
+    const headlightBar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 2.1), headlightMaterial);
+    headlightBar.position.set(-2.995, -0.4, 0);
+
+    const lowerIntake = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 1.3), trimMaterial);
+    lowerIntake.position.set(-2.995, -0.88, 0);
+
+    const taillightBar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 2.12), taillightMaterial);
+    taillightBar.position.set(2.985, -0.14, 0);
+
+    const rearGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.5), glassMaterial);
+    rearGlass.position.set(2.94, 0.42, 0);
+    rearGlass.rotation.y = Math.PI / 2;
+    rearGlass.rotation.x = -0.1;
 
     this.windshieldFilm = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.84, 1.24),
+      new THREE.PlaneGeometry(cabinWidth - 0.02, rakeLength - 0.06),
       new THREE.MeshPhysicalMaterial({
         color: 0x9df3ff,
         transparent: true,
@@ -278,39 +381,68 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         side: THREE.DoubleSide,
       }),
     );
-    this.windshieldFilm.position.set(-2.045, 0.27, 0);
-    this.windshieldFilm.rotation.copy(windshield.rotation);
+    this.windshieldFilmBase.copy(windshieldCenter).addScaledVector(outward, 0.01);
+    this.windshieldFilm.position.copy(this.windshieldFilmBase);
+    this.windshieldFilm.quaternion.copy(windshieldQuat);
+    this.windshieldAnchor.copy(windshieldCenter);
 
-    const wheelPositions = [
-      [-2.05, -1.18, 1.18],
-      [2.05, -1.18, 1.18],
-      [-2.05, -1.18, -1.18],
-      [2.05, -1.18, -1.18],
-    ] as const;
+    const tireGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.3, 40);
+    const rimGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.02, 32);
+    const spokeGeometry = new THREE.BoxGeometry(0.05, 0.52, 0.02);
+    const wheels = wheelX.flatMap((x) =>
+      [1, -1].map((side) => {
+        const wheel = new THREE.Group();
 
-    const wheels = wheelPositions.map(([x, y, z]) => {
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.34, 36), blackMaterial);
-      wheel.rotation.x = Math.PI / 2;
-      wheel.position.set(x, y, z);
-      wheel.castShadow = true;
-      return wheel;
-    });
+        const tire = new THREE.Mesh(tireGeometry, tireMaterial);
+        tire.rotation.x = Math.PI / 2;
+        tire.castShadow = true;
+
+        const rim = new THREE.Mesh(rimGeometry, rimMaterial);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.z = side * 0.15;
+
+        wheel.add(tire, rim);
+        for (let i = 0; i < 5; i += 1) {
+          const spoke = new THREE.Mesh(spokeGeometry, trimMaterial);
+          spoke.rotation.z = (i / 5) * Math.PI;
+          spoke.position.z = side * 0.162;
+          wheel.add(spoke);
+        }
+
+        wheel.position.set(x, wheelY, side * 1.0);
+        return wheel;
+      }),
+    );
 
     this.car.add(
-      body,
+      lower,
       cabin,
       windshield,
-      sideGlass,
-      sideGlassRight,
-      grille,
-      lightBar,
+      rearGlass,
+      headlightBar,
+      lowerIntake,
+      taillightBar,
       this.windshieldFilm,
+      ...sideDetails,
       ...wheels,
     );
     this.car.position.set(1.25, -0.08, 0);
     this.car.rotation.y = -0.28;
     this.car.scale.setScalar(0.02);
     this.scene.add(this.car);
+  }
+
+  private extrudeProfile(shape: THREE.Shape, width: number, bevel: number): THREE.ExtrudeGeometry {
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: width,
+      bevelEnabled: true,
+      bevelThickness: bevel,
+      bevelSize: bevel,
+      bevelSegments: 4,
+      curveSegments: 24,
+    });
+    geometry.translate(0, 0, -width / 2);
+    return geometry;
   }
 
   private updateFromScroll(): void {
@@ -359,17 +491,24 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const carScale = 0.02 + carReveal * 0.98;
     this.car.scale.setScalar(carScale);
     this.car.position.x = 1.25 - zoom * 0.45;
-    this.car.rotation.y = -0.28 + zoom * 0.35;
+    this.car.rotation.y = -0.28 + zoom * 0.5;
 
-    this.camera.position.x = -zoom * 1.85;
-    this.camera.position.y = 2.5 - zoom * 1.25;
-    this.camera.position.z = 11 - zoom * 6.9;
-    this.camera.lookAt(new THREE.Vector3(-1.55 - zoom * 0.7, -0.05 + zoom * 0.35, 0));
+    // Zoom toward the real windshield position in world space.
+    this.car.updateMatrixWorld();
+    this.zoomTarget.copy(this.windshieldAnchor).applyMatrix4(this.car.matrixWorld);
+    this.cameraTarget.set(-1.55, -0.05, 0).lerp(this.zoomTarget, zoom);
+
+    this.camera.position.set(
+      THREE.MathUtils.lerp(0, this.zoomTarget.x - 3.0, zoom),
+      THREE.MathUtils.lerp(2.5, this.zoomTarget.y + 1.2, zoom),
+      THREE.MathUtils.lerp(11, this.zoomTarget.z + 4.0, zoom),
+    );
+    this.camera.lookAt(this.cameraTarget);
 
     const material = this.windshieldFilm.material as THREE.MeshPhysicalMaterial;
     material.opacity = apply * 0.55;
-    this.windshieldFilm.position.x = -2.045 - (1 - apply) * 1.25;
-    this.windshieldFilm.position.y = 0.27 + (1 - apply) * 0.24;
+    this.windshieldFilm.position.x = this.windshieldFilmBase.x - (1 - apply) * 1.25;
+    this.windshieldFilm.position.y = this.windshieldFilmBase.y + (1 - apply) * 0.24;
   }
 
   private renderLoop(): void {
