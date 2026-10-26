@@ -8,6 +8,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 type Step = {
   label: string;
@@ -44,7 +45,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     {
       label: '04',
       title: 'Новая машина',
-      text: 'Показываем современный семейный SUV без привязки к брендам и логотипам.',
+      text: 'Mercedes-Benz GLS 580 2020 — большой премиальный SUV, подготовленный к установке защитной пленки.',
     },
     {
       label: '05',
@@ -220,216 +221,85 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private createCar(): void {
+    // Keep the car group as the animation root; only the vehicle geometry is replaced.
     this.car = new THREE.Group();
-
-    const bodyMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xe9eef1,
-      roughness: 0.22,
-      metalness: 0.45,
-      clearcoat: 1,
-      clearcoatRoughness: 0.08,
-    });
-    const glassMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0x0b1a24,
-      transparent: true,
-      opacity: 0.86,
-      roughness: 0.04,
-      metalness: 0.2,
-      clearcoat: 1,
-      side: THREE.DoubleSide,
-    });
-    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x0a0d11, roughness: 0.38, metalness: 0.3 });
-    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x0b0c0e, roughness: 0.85 });
-    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0x9aa4ad, roughness: 0.28, metalness: 0.9 });
-    const headlightMaterial = new THREE.MeshStandardMaterial({
-      color: 0xe8fbff,
-      emissive: 0x9ff0ff,
-      emissiveIntensity: 2.2,
-    });
-    const taillightMaterial = new THREE.MeshStandardMaterial({
-      color: 0xff3b3b,
-      emissive: 0xff1f2e,
-      emissiveIntensity: 1.8,
-    });
-
-    // Side profiles: front of the car points to -X, ground contact at y = -1.6.
-    const wheelRadius = 0.46;
-    const wheelY = -1.14;
-    const wheelX = [-1.95, 1.95];
-    const archRadius = 0.56;
-
-    const lowerShape = new THREE.Shape();
-    lowerShape.moveTo(2.8, wheelY);
-    lowerShape.lineTo(wheelX[1] + archRadius, wheelY);
-    lowerShape.absarc(wheelX[1], wheelY, archRadius, 0, Math.PI, false);
-    lowerShape.lineTo(wheelX[0] + archRadius, wheelY);
-    lowerShape.absarc(wheelX[0], wheelY, archRadius, 0, Math.PI, false);
-    lowerShape.lineTo(-2.8, wheelY);
-    lowerShape.quadraticCurveTo(-2.98, wheelY, -2.98, -0.92);
-    lowerShape.lineTo(-2.98, -0.46);
-    lowerShape.quadraticCurveTo(-2.97, -0.26, -2.78, -0.22);
-    lowerShape.lineTo(-1.72, -0.04);
-    lowerShape.lineTo(2.9, 0.02);
-    lowerShape.lineTo(2.96, -0.2);
-    lowerShape.lineTo(2.96, -0.92);
-    lowerShape.quadraticCurveTo(2.96, wheelY, 2.8, wheelY);
-
-    const lower = new THREE.Mesh(this.extrudeProfile(lowerShape, 2.2, 0.06), bodyMaterial);
-    lower.castShadow = true;
-
-    // Greenhouse: raked windshield, long flat roof, near-vertical tailgate.
-    const aPillarBase = new THREE.Vector2(-1.72, -0.04);
-    const aPillarTop = new THREE.Vector2(-0.82, 0.74);
-
-    const cabinShape = new THREE.Shape();
-    cabinShape.moveTo(aPillarBase.x, aPillarBase.y);
-    cabinShape.lineTo(aPillarTop.x, aPillarTop.y);
-    cabinShape.quadraticCurveTo(-0.62, 0.8, -0.3, 0.8);
-    cabinShape.lineTo(2.5, 0.79);
-    cabinShape.quadraticCurveTo(2.78, 0.78, 2.84, 0.6);
-    cabinShape.lineTo(2.9, 0.02);
-    cabinShape.lineTo(aPillarBase.x, aPillarBase.y);
-
-    const cabinWidth = 1.96;
-    const cabinBevel = 0.05;
-    const cabin = new THREE.Mesh(this.extrudeProfile(cabinShape, cabinWidth, cabinBevel), bodyMaterial);
-    cabin.castShadow = true;
-
-    // Windshield plane aligned with the A-pillar rake.
-    const rake = aPillarTop.clone().sub(aPillarBase);
-    const rakeLength = rake.length();
-    const along = new THREE.Vector3(rake.x, rake.y, 0).normalize();
-    const outward = new THREE.Vector3(-along.y, along.x, 0);
-    const windshieldQuat = new THREE.Quaternion().setFromRotationMatrix(
-      new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), along, outward),
-    );
-    const windshieldCenter = new THREE.Vector3(
-      (aPillarBase.x + aPillarTop.x) / 2,
-      (aPillarBase.y + aPillarTop.y) / 2,
-      0,
-    ).addScaledVector(outward, cabinBevel + 0.012);
-
-    const windshield = new THREE.Mesh(
-      new THREE.PlaneGeometry(cabinWidth - 0.08, rakeLength - 0.12),
-      glassMaterial,
-    );
-    windshield.position.copy(windshieldCenter);
-    windshield.quaternion.copy(windshieldQuat);
-
-    // Daylight opening on both sides, split by black B/C pillars.
-    const windowShape = new THREE.Shape();
-    windowShape.moveTo(-1.5, 0.08);
-    windowShape.lineTo(-0.82, 0.66);
-    windowShape.quadraticCurveTo(-0.66, 0.7, -0.4, 0.7);
-    windowShape.lineTo(2.42, 0.69);
-    windowShape.quadraticCurveTo(2.64, 0.68, 2.7, 0.52);
-    windowShape.lineTo(2.74, 0.08);
-    windowShape.lineTo(-1.5, 0.08);
-    const windowGeometry = new THREE.ShapeGeometry(windowShape, 12);
-    const sideZ = cabinWidth / 2 + cabinBevel + 0.006;
-
-    const sideDetails: THREE.Object3D[] = [];
-    for (const side of [1, -1]) {
-      const glass = new THREE.Mesh(windowGeometry, glassMaterial);
-      glass.position.z = side * sideZ;
-      sideDetails.push(glass);
-
-      for (const pillarX of [0.42, 1.62]) {
-        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.64, 0.012), trimMaterial);
-        pillar.position.set(pillarX, 0.39, side * (sideZ + 0.004));
-        sideDetails.push(pillar);
-      }
-
-      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.16, 0.22), bodyMaterial);
-      mirror.position.set(-1.38, 0.12, side * (sideZ + 0.12));
-      mirror.castShadow = true;
-      sideDetails.push(mirror);
-
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.05, 0.06), trimMaterial);
-      rail.position.set(1.05, 0.87, side * 0.82);
-      sideDetails.push(rail);
-
-      const cladding = new THREE.Mesh(new THREE.BoxGeometry(2.72, 0.12, 0.03), trimMaterial);
-      cladding.position.set(0, -1.08, side * 1.17);
-      sideDetails.push(cladding);
-    }
-
-    // Signature full-width front light bar and rear light strip.
-    const headlightBar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 2.1), headlightMaterial);
-    headlightBar.position.set(-2.995, -0.4, 0);
-
-    const lowerIntake = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 1.3), trimMaterial);
-    lowerIntake.position.set(-2.995, -0.88, 0);
-
-    const taillightBar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 2.12), taillightMaterial);
-    taillightBar.position.set(2.985, -0.14, 0);
-
-    const rearGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.5), glassMaterial);
-    rearGlass.position.set(2.94, 0.42, 0);
-    rearGlass.rotation.y = Math.PI / 2;
-    rearGlass.rotation.x = -0.1;
-
-    this.windshieldFilm = new THREE.Mesh(
-      new THREE.PlaneGeometry(cabinWidth - 0.02, rakeLength - 0.06),
-      new THREE.MeshPhysicalMaterial({
-        color: 0x9df3ff,
-        transparent: true,
-        opacity: 0,
-        roughness: 0.02,
-        metalness: 0,
-        clearcoat: 1,
-        side: THREE.DoubleSide,
-      }),
-    );
-    this.windshieldFilmBase.copy(windshieldCenter).addScaledVector(outward, 0.01);
-    this.windshieldFilm.position.copy(this.windshieldFilmBase);
-    this.windshieldFilm.quaternion.copy(windshieldQuat);
-    this.windshieldAnchor.copy(windshieldCenter);
-
-    const tireGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.3, 40);
-    const rimGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.02, 32);
-    const spokeGeometry = new THREE.BoxGeometry(0.05, 0.52, 0.02);
-    const wheels = wheelX.flatMap((x) =>
-      [1, -1].map((side) => {
-        const wheel = new THREE.Group();
-
-        const tire = new THREE.Mesh(tireGeometry, tireMaterial);
-        tire.rotation.x = Math.PI / 2;
-        tire.castShadow = true;
-
-        const rim = new THREE.Mesh(rimGeometry, rimMaterial);
-        rim.rotation.x = Math.PI / 2;
-        rim.position.z = side * 0.15;
-
-        wheel.add(tire, rim);
-        for (let i = 0; i < 5; i += 1) {
-          const spoke = new THREE.Mesh(spokeGeometry, trimMaterial);
-          spoke.rotation.z = (i / 5) * Math.PI;
-          spoke.position.z = side * 0.162;
-          wheel.add(spoke);
-        }
-
-        wheel.position.set(x, wheelY, side * 1.0);
-        return wheel;
-      }),
-    );
-
-    this.car.add(
-      lower,
-      cabin,
-      windshield,
-      rearGlass,
-      headlightBar,
-      lowerIntake,
-      taillightBar,
-      this.windshieldFilm,
-      ...sideDetails,
-      ...wheels,
-    );
     this.car.position.set(1.25, -0.08, 0);
     this.car.rotation.y = -0.28;
     this.car.scale.setScalar(0.02);
     this.scene.add(this.car);
+
+    // The real GLS 580 FBX is served as a static asset from the repository.
+    const loader = new FBXLoader();
+    loader.load(
+      '/assets/models/mercedes-gls-580.fbx',
+      (model) => {
+        model.name = 'Mercedes-Benz GLS 580 2020';
+        model.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            object.castShadow = true;
+            object.receiveShadow = true;
+            const materials = Array.isArray(object.material) ? object.material : [object.material];
+            for (const material of materials) {
+              if ('envMapIntensity' in material) {
+                (material as THREE.MeshStandardMaterial).envMapIntensity = 1.1;
+              }
+            }
+          }
+        });
+
+        // Normalize unknown source units while preserving the model's proportions.
+        model.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(model);
+        const size = bounds.getSize(new THREE.Vector3());
+        const center = bounds.getCenter(new THREE.Vector3());
+        const largest = Math.max(size.x, size.y, size.z) || 1;
+        model.scale.setScalar(6 / largest);
+        model.position.sub(center.multiplyScalar(6 / largest));
+        model.position.y -= (bounds.min.y - bounds.getCenter(new THREE.Vector3()).y) * (6 / largest);
+        model.updateMatrixWorld(true);
+
+        // Neutral silver finish if the source file has no usable materials.
+        model.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            const materials = Array.isArray(object.material) ? object.material : [object.material];
+            for (const material of materials) {
+              if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhysicalMaterial) {
+                material.roughness = Math.min(material.roughness ?? 0.35, 0.42);
+                material.metalness = Math.max(material.metalness ?? 0.25, 0.18);
+              }
+            }
+          }
+        });
+        this.car.add(model);
+      },
+      undefined,
+      (error) => console.error('Unable to load Mercedes-Benz GLS 580 FBX model', error),
+    );
+
+    // Film remains a separate animated layer. Its placement is tuned to the front
+    // windshield region of the normalized SUV and can be refined after visual QA.
+    const windshieldWidth = 1.65;
+    const windshieldHeight = 0.82;
+    const glassMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0x9df3ff,
+      transparent: true,
+      opacity: 0,
+      roughness: 0.02,
+      metalness: 0,
+      clearcoat: 1,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.windshieldFilm = new THREE.Mesh(
+      new THREE.PlaneGeometry(windshieldWidth, windshieldHeight),
+      glassMaterial,
+    );
+    this.windshieldFilm.position.set(-2.18, 0.58, 0.02);
+    this.windshieldFilm.rotation.z = -0.28;
+    this.windshieldFilm.rotation.y = -0.12;
+    this.windshieldFilmBase.copy(this.windshieldFilm.position);
+    this.windshieldAnchor.set(-2.18, 0.58, 0);
+    this.car.add(this.windshieldFilm);
   }
 
   private extrudeProfile(shape: THREE.Shape, width: number, bevel: number): THREE.ExtrudeGeometry {
