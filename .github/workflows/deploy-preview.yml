@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -29,6 +31,8 @@ jobs:
         run: npm ci
       - name: Build Angular app
         run: npm run build -- --base-href /sswrap/
+      - name: Fix model URL for project subpath
+        run: sed -i 's|/assets/models/mercedes-gls-580.fbx|/sswrap/assets/models/mercedes-gls-580.fbx|g' dist/sswrap/browser/*.js
       - name: Prepare Pages artifact
         run: |
           touch dist/sswrap/browser/.nojekyll
